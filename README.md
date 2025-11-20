@@ -1,191 +1,389 @@
-# 📊 Sesiones Abiertas por Pushes - Analytics GCBA
+# Sesiones Abiertas por Pushes
 
-Script para analizar y reportar sesiones de chatbot iniciadas por WhatsApp Templates (pushes) desde AWS Athena, generando reportes automatizados en formato Excel Dashboard para el Gobierno de la Ciudad de Buenos Aires.
+Script automatizado para generar reportes de sesiones abiertas por mensajes push del chatbot del Gobierno de la Ciudad de Buenos Aires (GCBA). Soporta consultas de **meses completos** y **rangos de fechas personalizados**.
 
-## 📝 Descripción
+## 📋 Descripción
 
-Este script consulta la base de datos `boti_session_metrics_2` en AWS Athena para obtener métricas de sesiones agrupadas por `starting_cause`, identificando específicamente las sesiones iniciadas mediante **WhatsAppTemplate** (pushes enviados a usuarios).
+Este proyecto consulta las métricas de sesiones iniciadas por push notifications a través de AWS Athena, procesando datos de la tabla `boti_session_metrics_2`. Filtra las sesiones cuyo `starting_cause` es `'WhatsAppTemplate'` y genera automáticamente reportes en formato CSV y Excel con la estructura de dashboard requerida por GCBA.
 
-El resultado se exporta en:
-- **CSV**: Datos completos con todas las causas de inicio
-- **Excel Dashboard**: Reporte estructurado con el valor en la celda D4
+## ✨ Características
 
-## 🎯 Contexto GCBA
+- ✅ **Dos modos de consulta:** Mes completo o rango personalizado de fechas
+- ✅ Consulta automática a AWS Athena con filtrado por starting_cause
+- ✅ Generación de reportes en CSV y Excel
+- ✅ Dashboard Excel con estructura predefinida del GCBA
+- ✅ Configuración flexible mediante archivo de texto
+- ✅ Validación de credenciales y permisos AWS
+- ✅ Desglose completo por tipo de starting_cause
+- ✅ Manejo robusto de errores con mensajes descriptivos
 
-Este script forma parte del ecosistema de analytics para el chatbot BOTI del Gobierno de la Ciudad de Buenos Aires, complementando otros reportes mensuales de métricas web y conversacionales.
+## 🔧 Requisitos Previos
 
-### Indicador medido
-**Sesiones abiertas por Pushes**: Cantidad de sesiones que se iniciaron como resultado de un mensaje push (WhatsAppTemplate) enviado proactivamente a usuarios.
+### Software Necesario
 
-## 🔧 Requisitos
+- **Python 3.7+**
+- **AWS CLI** configurado
+- **aws-azure-login** para autenticación con Azure AD
 
-### Credenciales AWS
-- **Rol requerido**: `PIBAConsumeBoti`
-- **Workgroup**: `Production-caba-piba-athena-boti-group`
-- **Database**: `caba-piba-consume-zone-db`
-- **Región**: `us-east-1`
+### Librerías Python
 
-### Dependencias Python
 ```bash
-pip install boto3
-pip install awswrangler
-pip install pandas
-pip install openpyxl
+pip install boto3 awswrangler pandas openpyxl
 ```
 
-### Herramienta de autenticación
+O usando el archivo de requisitos:
+
 ```bash
-npm install -g aws-azure-login
+pip install -r requirements.txt
 ```
 
-## ⚙️ Configuración
+### Permisos AWS
 
-### 1. Configurar AWS Azure Login
-```bash
-aws-azure-login --configure --profile default
+- **Rol requerido:** `PIBAConsumeBoti`
+- **Workgroup:** `Production-caba-piba-athena-boti-group`
+- **Base de datos:** `caba-piba-consume-zone-db`
+- **Región:** `us-east-1`
+
+## 🚀 Instalación
+
+1. **Clonar el repositorio:**
+   ```bash
+   git clone https://github.com/EdVeralli/Sesiones_Abiertas_Pushes
+   cd Sesiones_Abiertas_Pushes
+   ```
+
+2. **Instalar dependencias:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Configurar AWS:**
+   ```bash
+   aws-azure-login --configure --profile default
+   ```
+
+## 📝 Configuración
+
+El script se configura mediante el archivo `config_fechas.txt` y soporta dos modos:
+
+### Modo 1: Mes Completo
+```ini
+MES=10
+AÑO=2025
 ```
+→ Consulta del 1 al 31 de octubre 2025
 
-### 2. Autenticarse con el rol correcto
+### Modo 2: Rango Personalizado
+```ini
+FECHA_INICIO=2025-10-01
+FECHA_FIN=2025-10-15
+```
+→ Consulta del 1 al 15 de octubre 2025
+
+**Reglas:**
+- Formato de fecha: `YYYY-MM-DD` (ej: 2025-10-15)
+- Si ambos modos están configurados, se usa el rango personalizado
+- El mes debe estar entre 1 y 12
+- FECHA_INICIO debe ser ≤ FECHA_FIN
+
+## 🎯 Uso
+
+### 1. Autenticarse en AWS
+
 ```bash
 aws-azure-login --profile default --mode=gui
 ```
-⚠️ **Importante**: Seleccionar el rol **PIBAConsumeBoti** durante la autenticación.
 
-### 3. Configurar fechas
-El script crea automáticamente un archivo `config_fechas.txt` la primera vez que se ejecuta. También podés crearlo manualmente:
+⚠️ **Importante:** Seleccionar el rol `PIBAConsumeBoti` durante la autenticación.
 
-```txt
-# Configuracion de fecha para filtro automatico
-# Formato: MES=numero del mes (1-12)
-# Formato: AÑO=año completo (ej: 2024)
+### 2. Configurar el período
 
-MES=9
-AÑO=2024
-```
+Editar `config_fechas.txt` según el modo deseado (ver sección Configuración arriba).
 
-## 🚀 Uso
+### 3. Ejecutar el script
 
-### Ejecución básica
 ```bash
-python Pushes_Abiertas.py
+python Sesiones_Abiertas_porPushes.py
 ```
 
-### Ejecución desde IPython/Spyder
-```python
-%runfile C:/ruta/a/Pushes_Abiertas.py
-```
+El script mostrará claramente qué modo está usando y el período configurado.
 
-### Cambiar mes/año
-1. Editar `config_fechas.txt`
-2. Modificar valores de `MES` y `AÑO`
-3. Volver a ejecutar el script
+## 📊 Salida
 
-## 📂 Estructura de archivos
+El script genera dos archivos en la carpeta `output/`:
 
-```
-Sesiones_Abiertas_Pushes/
-│
-├── Pushes_Abiertas.py          # Script principal
-├── config_fechas.txt            # Configuración de mes/año (auto-generado)
-├── README.md                    # Este archivo
-│
-└── output/                      # Carpeta de salida (auto-generada)
-    ├── pushes_abiertas_septiembre_2024.csv
-    └── pushes_abiertas_septiembre_2024.xlsx
-```
+### Nombres de Archivo
 
-## 📊 Query ejecutada
+**Modo mes completo:**
+- `sesiones_abiertas_pushes_octubre_2025.csv`
+- `sesiones_abiertas_pushes_octubre_2025.xlsx` (Header: `oct-25`)
+
+**Modo rango personalizado:**
+- `sesiones_abiertas_pushes_20251001_a_20251015.csv`
+- `sesiones_abiertas_pushes_20251001_a_20251015.xlsx` (Header: `01/10-15/10/25`)
+
+### Estructura del Dashboard Excel
+
+| Columna B | Columna C | Columna D |
+|-----------|-----------|-----------|
+| **Indicador** | **Descripción/Detalle** | **[período]** |
+| Conversaciones | Q Conversaciones | - |
+| Usuarios | Q Usuarios únicos | - |
+| **Sesiones abiertas por Pushes** | Q Sesiones que se abrieron con una Push | **[VALOR]** |
+| Sesiones Alcanzadas por Pushes | Q Sesiones que recibieron al menos 1 Push | - |
+| Mensajes Pushes Enviados | Q de mensajes enviados bajo el formato push | - |
+| ... | ... | - |
+
+> **Nota:** Solo la celda D4 (Sesiones abiertas por Pushes) se completa automáticamente. Las demás métricas deben llenarse con otros scripts o manualmente.
+
+## 🔍 Query Ejecutada
+
+El script ejecuta la siguiente consulta SQL en Athena:
 
 ```sql
 SELECT starting_cause, count(distinct (session_id)) as Cant_sesiones 
 FROM "caba-piba-consume-zone-db"."boti_session_metrics_2"   
-WHERE CAST(session_creation_time AS DATE) BETWEEN date '2024-09-01' and date '2024-09-30' 
+WHERE CAST(session_creation_time AS DATE) BETWEEN date '[fecha_inicio]' and date '[fecha_fin]' 
 GROUP BY starting_cause
 ```
 
-La query filtra automáticamente por el rango de fechas del mes especificado en `config_fechas.txt`.
+**Parámetros dinámicos:**
+- `fecha_inicio`: Fecha de inicio del período
+- `fecha_fin`: Fecha de fin del período
 
-## 📈 Salida
+**Procesamiento del resultado:**
+- El script extrae el valor donde `starting_cause = 'WhatsAppTemplate'`
+- Este valor representa las sesiones iniciadas por push notifications
+- Muestra un desglose completo de todos los starting_cause encontrados
 
-### Console Output
+## 💡 Casos de Uso
+
+### Reportes Mensuales
+```ini
+MES=10
+AÑO=2025
 ```
-============================================================
-RESULTADOS - SEPTIEMBRE 2024
-============================================================
+Reportes mensuales tradicionales de sesiones abiertas por push.
 
+### Reportes Quincenales
+```ini
+FECHA_INICIO=2025-10-01
+FECHA_FIN=2025-10-15
+```
+Primera o segunda quincena del mes.
+
+### Análisis de Campañas
+```ini
+FECHA_INICIO=2025-10-05
+FECHA_FIN=2025-10-20
+```
+Medir efectividad de campañas de push específicas.
+
+### Comparación Semanal
+```ini
+FECHA_INICIO=2025-10-01
+FECHA_FIN=2025-10-07
+```
+Seguimiento semanal de apertura de sesiones por push.
+
+### Análisis de Impacto
+```ini
+FECHA_INICIO=2025-10-15
+FECHA_FIN=2025-10-15
+```
+Análisis de un día específico con alta actividad de push.
+
+## 🛠️ Troubleshooting
+
+### Error: Credenciales expiradas
+
+```
+[ERROR] ExpiredToken
+```
+
+**Solución:**
+```bash
+aws-azure-login --profile default --mode=gui
+```
+
+### Error: Rol incorrecto
+
+```
+[ADVERTENCIA] No estas usando el rol correcto
+```
+
+**Solución:** Verificar que se seleccionó `PIBAConsumeBoti` durante la autenticación.
+
+### Error: Formato de fecha inválido
+
+```
+[ERROR] Formato de fecha invalido. Use YYYY-MM-DD
+```
+
+**Solución:** Usar el formato correcto:
+```ini
+FECHA_INICIO=2025-10-01  # ✅ Correcto
+# FECHA_INICIO=01-10-2025  # ❌ Incorrecto
+```
+
+### Error: No se encontró 'WhatsAppTemplate'
+
+```
+[ADVERTENCIA] No se encontró 'WhatsAppTemplate' en starting_cause
+```
+
+**Posibles causas:**
+- No hubo sesiones iniciadas por push en el período consultado
+- El valor del starting_cause ha cambiado
+- El script mostrará todos los valores encontrados para debugging
+
+### Error: Tabla no encontrada
+
+```
+[!] La tabla no existe o no tienes permisos
+```
+
+**Solución:** Verificar permisos sobre la tabla `boti_session_metrics_2`.
+
+### Query muy lenta
+
+La consulta con GROUP BY puede tardar varios minutos dependiendo del volumen de datos. Esto es normal.
+
+## 📁 Estructura del Proyecto
+
+```
+Sesiones_Abiertas_Pushes/
+│
+├── Sesiones_Abiertas_porPushes.py  # Script principal
+├── config_fechas.txt                # Configuración de fechas
+├── requirements.txt                 # Dependencias Python
+├── README.md                        # Esta documentación
+│
+└── output/                          # Carpeta de salida (se crea automáticamente)
+    ├── sesiones_abiertas_pushes_octubre_2025.csv
+    ├── sesiones_abiertas_pushes_octubre_2025.xlsx
+    ├── sesiones_abiertas_pushes_20251001_a_20251015.csv
+    └── sesiones_abiertas_pushes_20251001_a_20251015.xlsx
+```
+
+## 🔐 Seguridad
+
+- Las credenciales AWS se manejan mediante `aws-azure-login`
+- No se almacenan credenciales en el código
+- Se requiere autenticación mediante Azure AD
+- Solo usuarios con rol `PIBAConsumeBoti` pueden ejecutar el script
+
+## 🔄 Workflow Típico
+
+```bash
+# 1. Autenticarse
+aws-azure-login --profile default --mode=gui
+
+# 2. Configurar período (editar config_fechas.txt)
+
+# 3. Ejecutar
+python Sesiones_Abiertas_porPushes.py
+
+# 4. Verificar archivos en output/
+ls output/
+
+# 5. Para otro período, repetir desde el paso 2
+```
+
+## 🆘 Validaciones Automáticas
+
+El script valida automáticamente:
+
+- ✅ Formato de fechas (YYYY-MM-DD)
+- ✅ Mes entre 1 y 12
+- ✅ Año razonable (2020-2030)
+- ✅ FECHA_INICIO ≤ FECHA_FIN
+- ✅ Existencia de configuración válida
+- ✅ Credenciales AWS válidas
+- ✅ Rol correcto (PIBAConsumeBoti)
+- ✅ Presencia de 'WhatsAppTemplate' en resultados
+
+## 📊 Desglose de Resultados
+
+El script muestra un desglose completo de todas las sesiones por `starting_cause`:
+
+```
 Desglose por starting_cause:
   WhatsAppTemplate: 1,234
-  user: 5,678
-  other: 890
+  direct: 5,678
+  organic: 2,345
+  ...
 
-============================================================
 SESIONES ABIERTAS POR PUSHES (WhatsAppTemplate): 1,234
-============================================================
 ```
 
-### Archivos generados
+Esto permite:
+- Verificar que el valor extraído es correcto
+- Analizar otras fuentes de inicio de sesión
+- Detectar anomalías en los datos
 
-#### 1. CSV (`pushes_abiertas_septiembre_2024.csv`)
-Contiene todas las filas retornadas por la query con columnas:
-- `starting_cause`: Tipo de inicio de sesión
-- `Cant_sesiones`: Cantidad de sesiones únicas
+## 🤝 Contribuciones
 
-#### 2. Excel Dashboard (`pushes_abiertas_septiembre_2024.xlsx`)
-Hoja "Dashboard" con estructura completa de indicadores GCBA donde:
-- **Celda D4**: Contiene el valor de sesiones con `starting_cause = 'WhatsAppTemplate'`
-- Resto de celdas: Estructura preparada para otros indicadores
+Este es un proyecto interno del GCBA. Para contribuir:
 
-| Indicador | Descripción/Detalle | sep-24 |
-|-----------|---------------------|--------|
-| Conversaciones | Q Conversaciones | |
-| Usuarios | Q Usuarios únicos | |
-| **Sesiones abiertas por Pushes** | **Q Sesiones que se abrieron con una Push** | **1,234** |
-| Sesiones Alcanzadas por Pushes | Q Sesiones que recibieron al menos 1 Push | |
-| ... | ... | |
-
-## 🔍 Troubleshooting
-
-### Error: "Rol actual no es PIBAConsumeBoti"
-```bash
-aws-azure-login --profile default --mode=gui
-# Seleccionar PIBAConsumeBoti durante la autenticación
-```
-
-### Error: "ExpiredToken"
-```bash
-# Tu sesión AWS expiró, volver a autenticar
-aws-azure-login --profile default --mode=gui
-```
-
-### Error: "No se encontró 'WhatsAppTemplate' en starting_cause"
-- Verificar que existan datos para el mes especificado
-- Revisar que el campo `starting_cause` contenga el valor esperado
-- El script usará `0` si no encuentra WhatsAppTemplate
-
-### Error: "Workgroup not found"
-El script intentará ejecutar sin especificar workgroup automáticamente.
-
-## 🔗 Proyectos relacionados
-
-- [Metricas_Web_Mensual](https://github.com/EdVeralli/Metricas_Web_Mensual) - Analytics GA4 para sitios GCBA
-- Otros scripts de métricas BOTI del ecosistema GCBA
+1. Fork el proyecto
+2. Crear una rama para tu feature (`git checkout -b feature/AmazingFeature`)
+3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
+4. Push a la rama (`git push origin feature/AmazingFeature`)
+5. Abrir un Pull Request
 
 ## 👤 Autor
 
-**Damián Veralli**  
-Data Scientist - Gobierno de la Ciudad de Buenos Aires (GCBA)
+**Eduardo Veralli**
+- GitHub: [@EdVeralli](https://github.com/EdVeralli)
 
 ## 📄 Licencia
 
-Este proyecto es de uso interno del GCBA para reportes de métricas del chatbot BOTI.
+Proyecto del Gobierno de la Ciudad de Buenos Aires (GCBA).
 
 ## 📞 Soporte
 
-Para consultas sobre este script o métricas del chatbot BOTI:
+Para problemas o consultas:
+- [Abrir un issue en GitHub](https://github.com/EdVeralli/Sesiones_Abiertas_Pushes/issues)
 - Contactar al equipo de Data Analytics GCBA
-- Verificar permisos de acceso a AWS Athena con rol PIBAConsumeBoti
+
+## 📊 Información Técnica
+
+### Versión
+
+**Versión:** 2.0  
+**Última actualización:** Noviembre 2025
+
+### Cambios Principales V2.0
+
+- ✅ Soporte para rangos de fechas personalizados
+- ✅ Detección automática del modo de operación
+- ✅ Nombres de archivo adaptativos según el modo
+- ✅ Headers de Excel dinámicos
+- ✅ 100% compatible con configuraciones V1.0
+
+### Configuración AWS
+
+- **Región:** `us-east-1`
+- **Workgroup:** `Production-caba-piba-athena-boti-group`
+- **Database:** `caba-piba-consume-zone-db`
+- **Rol requerido:** `PIBAConsumeBoti`
+- **Tabla:** `boti_session_metrics_2`
+
+### Dependencias
+
+```
+boto3>=1.26.0         # Cliente AWS
+awswrangler>=3.0.0    # Integración Pandas-Athena
+pandas>=1.5.0         # Procesamiento de datos
+openpyxl>=3.0.0       # Generación de Excel
+```
+
+## 🔗 Proyectos Relacionados
+
+- [Pushes Enviadas](https://github.com/EdVeralli/Pushes_Enviadas) - Métricas de mensajes push enviados (celda D6)
+- Sesiones Alcanzadas por Pushes - Métricas de sesiones alcanzadas (celda D5)
 
 ---
 
-**Última actualización**: Noviembre 2024  
-**Versión**: 1.0
+**Gobierno de la Ciudad de Buenos Aires - Área de Data Analytics**
