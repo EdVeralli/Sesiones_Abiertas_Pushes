@@ -7,14 +7,9 @@ aws-azure-login --profile default --mode=gui
 
 
 
-Script para ejecutar query de Sesiones Abiertas por Pushes (starting_cause) en Athena
+Script para ejecutar query de Pushes Abiertas (starting_cause) en Athena
 Guarda resultado en CSV y escribe el resultado en la celda D4 de Excel
 Lee configuracion de fechas desde archivo config_fechas.txt
-
-MODOS SOPORTADOS:
-1. MES COMPLETO: Especificar MES y AÑO (comportamiento original)
-2. RANGO PERSONALIZADO: Especificar FECHA_INICIO y FECHA_FIN
-
 IMPORTANTE: El Excel SIEMPRE se crea NUEVO desde cero con estructura de Dashboard
 Workgroup: Production-caba-piba-athena-boti-group
 Rol: PIBAConsumeBoti
@@ -40,40 +35,24 @@ CONFIG = {
 # ==================== FUNCIONES ====================
 
 def read_date_config(config_file):
-    """
-    Lee el archivo de configuracion y determina el modo:
-    - MODO 1: MES + AÑO (mes completo)
-    - MODO 2: FECHA_INICIO + FECHA_FIN (rango personalizado)
-    
-    Retorna: (modo, fecha_inicio, fecha_fin, mes, anio, descripcion)
-    """
+    """Lee el archivo de configuracion y extrae MES y AÑO"""
     try:
         if not os.path.exists(config_file):
             print("[ERROR] No se encuentra el archivo: {}".format(config_file))
             print("    Creando archivo de ejemplo...")
             
             with open(config_file, 'w', encoding='utf-8') as f:
-                f.write("# ========================================\n")
-                f.write("# Configuracion de fechas para el reporte\n")
-                f.write("# ========================================\n\n")
-                f.write("# MODO 1: Mes completo (comportamiento original)\n")
-                f.write("# Descomentar estas lineas para usar mes completo:\n")
-                f.write("MES=10\n")
-                f.write("AÑO=2025\n\n")
-                f.write("# MODO 2: Rango de fechas personalizado\n")
-                f.write("# Descomentar estas lineas para usar rango personalizado:\n")
-                f.write("# FECHA_INICIO=2025-10-01\n")
-                f.write("# FECHA_FIN=2025-10-15\n\n")
-                f.write("# NOTA: Si ambos modos estan configurados, se usa el MODO 2 (rango personalizado)\n")
+                f.write("# Configuracion de fecha para filtro automatico\n")
+                f.write("# Formato: MES=numero del mes (1-12)\n")
+                f.write("# Formato: AÑO=año completo (ej: 2025)\n\n")
+                f.write("MES=9\n")
+                f.write("AÑO=2024\n")
             
             print("    Archivo creado: {}".format(config_file))
-            return 'mes', None, None, 10, 2025, "octubre 2025"
+            return 9, 2024
         
-        # Leer el archivo y buscar ambos modos
         mes = None
         anio = None
-        fecha_inicio_str = None
-        fecha_fin_str = None
         
         with open(config_file, 'r', encoding='utf-8') as f:
             for line in f:
@@ -81,7 +60,6 @@ def read_date_config(config_file):
                 if not line or line.startswith('#'):
                     continue
                 
-                # MODO 1: MES y AÑO
                 if line.startswith('MES='):
                     mes_str = line.split('=')[1].strip()
                     mes = int(mes_str)
@@ -89,73 +67,26 @@ def read_date_config(config_file):
                 if line.startswith('AÑO=') or line.startswith('ANO='):
                     anio_str = line.split('=')[1].strip()
                     anio = int(anio_str)
-                
-                # MODO 2: FECHA_INICIO y FECHA_FIN
-                if line.startswith('FECHA_INICIO='):
-                    fecha_inicio_str = line.split('=')[1].strip()
-                
-                if line.startswith('FECHA_FIN='):
-                    fecha_fin_str = line.split('=')[1].strip()
         
-        # PRIORIDAD: Si hay FECHA_INICIO y FECHA_FIN, usar MODO 2 (rango personalizado)
-        if fecha_inicio_str and fecha_fin_str:
-            try:
-                fecha_inicio = datetime.strptime(fecha_inicio_str, '%Y-%m-%d')
-                fecha_fin = datetime.strptime(fecha_fin_str, '%Y-%m-%d')
-                
-                if fecha_inicio > fecha_fin:
-                    print("[ERROR] FECHA_INICIO no puede ser posterior a FECHA_FIN")
-                    return None, None, None, None, None, None
-                
-                # Descripcion para el rango
-                descripcion = "{} al {}".format(
-                    fecha_inicio.strftime('%d/%m/%Y'),
-                    fecha_fin.strftime('%d/%m/%Y')
-                )
-                
-                print("[INFO] Modo: RANGO PERSONALIZADO")
-                return 'rango', fecha_inicio_str, fecha_fin_str, None, None, descripcion
-                
-            except ValueError as e:
-                print("[ERROR] Formato de fecha invalido. Use YYYY-MM-DD (ej: 2025-10-01)")
-                print("    Error: {}".format(str(e)))
-                return None, None, None, None, None, None
+        if mes is None or anio is None:
+            print("[ERROR] El archivo {} no contiene MES o AÑO validos".format(config_file))
+            return None, None
         
-        # Si no hay rango, usar MODO 1 (mes completo)
-        if mes is not None and anio is not None:
-            if mes < 1 or mes > 12:
-                print("[ERROR] Mes invalido: {}. Debe estar entre 1 y 12".format(mes))
-                return None, None, None, None, None, None
-            
-            if anio < 2020 or anio > 2030:
-                print("[ADVERTENCIA] Año inusual: {}".format(anio))
-            
-            # Calcular primer y ultimo dia del mes
-            primer_dia = 1
-            ultimo_dia = monthrange(anio, mes)[1]
-            fecha_inicio_str = "{:04d}-{:02d}-{:02d}".format(anio, mes, primer_dia)
-            fecha_fin_str = "{:04d}-{:02d}-{:02d}".format(anio, mes, ultimo_dia)
-            
-            # Descripcion para el mes completo
-            mes_nombre = get_month_name(mes)
-            descripcion = "{} {}".format(mes_nombre, anio)
-            
-            print("[INFO] Modo: MES COMPLETO")
-            return 'mes', fecha_inicio_str, fecha_fin_str, mes, anio, descripcion
+        if mes < 1 or mes > 12:
+            print("[ERROR] Mes invalido: {}. Debe estar entre 1 y 12".format(mes))
+            return None, None
         
-        # Si no hay ninguno de los dos modos configurados
-        print("[ERROR] El archivo {} no contiene configuracion valida".format(config_file))
-        print("    Debe tener MES+AÑO o FECHA_INICIO+FECHA_FIN")
-        return None, None, None, None, None, None
+        if anio < 2020 or anio > 2030:
+            print("[ADVERTENCIA] Año inusual: {}".format(anio))
+        
+        return mes, anio
         
     except Exception as e:
         print("[ERROR] Error leyendo archivo de configuracion: {}".format(str(e)))
-        return None, None, None, None, None, None
+        return None, None
 
 def get_month_name(mes):
     """Retorna el nombre del mes en español"""
-    if mes is None:
-        return 'rango'
     meses = {
         1: 'enero', 2: 'febrero', 3: 'marzo', 4: 'abril',
         5: 'mayo', 6: 'junio', 7: 'julio', 8: 'agosto',
@@ -165,8 +96,6 @@ def get_month_name(mes):
 
 def get_month_abbr(mes):
     """Retorna la abreviatura del mes en español"""
-    if mes is None:
-        return 'rango'
     meses = {
         1: 'ene', 2: 'feb', 3: 'mar', 4: 'abr',
         5: 'may', 6: 'jun', 7: 'jul', 8: 'ago',
@@ -174,8 +103,15 @@ def get_month_abbr(mes):
     }
     return meses.get(mes, 'mes')
 
-def build_query(fecha_inicio, fecha_fin):
-    """Construye la query de Sesiones Abiertas por Pushes con el rango de fechas especificado"""
+def build_query(mes, anio):
+    """Construye la query de Pushes Abiertas con el mes y año especificados"""
+    
+    # Calcular primer y último día del mes
+    primer_dia = 1
+    ultimo_dia = monthrange(anio, mes)[1]
+    
+    fecha_inicio = "{:04d}-{:02d}-{:02d}".format(anio, mes, primer_dia)
+    fecha_fin = "{:04d}-{:02d}-{:02d}".format(anio, mes, ultimo_dia)
     
     query = """SELECT starting_cause, count(distinct (session_id)) as Cant_sesiones 
 FROM "caba-piba-consume-zone-db"."boti_session_metrics_2"   
@@ -184,21 +120,14 @@ group by starting_cause""".format(fecha_inicio=fecha_inicio, fecha_fin=fecha_fin
     
     return query
 
-def generate_filename(modo, mes, anio, fecha_inicio, fecha_fin):
-    """Genera el nombre del archivo basado en el modo y las fechas"""
-    if modo == 'mes':
-        mes_nombre = get_month_name(mes)
-        filename_csv = "sesiones_abiertas_pushes_{0}_{1}.csv".format(mes_nombre, anio)
-        filename_excel = "sesiones_abiertas_pushes_{0}_{1}.xlsx".format(mes_nombre, anio)
-    else:  # modo == 'rango'
-        fecha_inicio_fmt = fecha_inicio.replace('-', '')
-        fecha_fin_fmt = fecha_fin.replace('-', '')
-        filename_csv = "sesiones_abiertas_pushes_{0}_a_{1}.csv".format(fecha_inicio_fmt, fecha_fin_fmt)
-        filename_excel = "sesiones_abiertas_pushes_{0}_a_{1}.xlsx".format(fecha_inicio_fmt, fecha_fin_fmt)
-    
+def generate_filename(mes, anio):
+    """Genera el nombre del archivo basado en mes y año"""
+    mes_nombre = get_month_name(mes)
+    filename_csv = "pushes_abiertas_{0}_{1}.csv".format(mes_nombre, anio)
+    filename_excel = "pushes_abiertas_{0}_{1}.xlsx".format(mes_nombre, anio)
     return filename_csv, filename_excel
 
-def create_excel_with_dashboard(filepath, result_value, modo, mes, anio, fecha_inicio, fecha_fin):
+def create_excel_with_dashboard(filepath, result_value, mes, anio):
     """
     Crea un Excel NUEVO desde cero con estructura de Dashboard completa
     Escribe el resultado SOLO en la celda D4 (Sesiones abiertas por Pushes)
@@ -214,21 +143,10 @@ def create_excel_with_dashboard(filepath, result_value, modo, mes, anio, fecha_i
     # Formato para encabezados
     header_font = Font(bold=True)
     
-    # Determinar el texto del encabezado de fecha
-    if modo == 'mes':
-        header_fecha = '{}-{}'.format(get_month_abbr(mes), str(anio)[-2:])  # Formato: oct-25
-    else:  # modo == 'rango'
-        fecha_inicio_obj = datetime.strptime(fecha_inicio, '%Y-%m-%d')
-        fecha_fin_obj = datetime.strptime(fecha_fin, '%Y-%m-%d')
-        header_fecha = '{}-{}'.format(
-            fecha_inicio_obj.strftime('%d/%m'),
-            fecha_fin_obj.strftime('%d/%m/%y')
-        )
-    
     # FILA 1: Encabezados
     ws['B1'] = 'Indicador'
     ws['C1'] = 'Descripción/Detalle'
-    ws['D1'] = header_fecha
+    ws['D1'] = '{}-{}'.format(get_month_abbr(mes), str(anio)[-2:])  # Formato: sep-24
     ws['B1'].font = header_font
     ws['C1'].font = header_font
     ws['D1'].font = header_font
@@ -300,33 +218,37 @@ def create_excel_with_dashboard(filepath, result_value, modo, mes, anio, fecha_i
     
     # FILA 15: CES (Customer Effort Score)
     ws['B15'] = 'CES (Customer Effort Score)'
-    ws['C15'] = 'Puntuación del esfuerzo del cliente [Estadísticas Eventos]'
+    ws['C15'] = 'Mide la facilidad con la que los usuarios pueden interactuar con'
     # D15 vacío (no se llena)
     
-    # Ajustar anchos de columna
+    # FILA 16: Satisfacción (CSAT)
+    ws['B16'] = 'Satisfacción (CSAT)'
+    ws['C16'] = 'Mide la satisfacción usando una escala de 1 a 5, donde 1 es "muy insatisfecho"'
+    # D16 vacío (no se llena)
+    
+    # Ajustar ancho de columnas
     ws.column_dimensions['B'].width = 35
-    ws.column_dimensions['C'].width = 50
+    ws.column_dimensions['C'].width = 60
     ws.column_dimensions['D'].width = 15
     
-    # Guardar
+    # Guardar el archivo
     wb.save(filepath)
-    print("    [OK] Excel generado: {}".format(filepath))
+    print("    [OK] Excel creado en: {}".format(filepath))
 
 def check_aws_credentials():
     """Verifica que las credenciales AWS esten configuradas y sean validas"""
     try:
         sts = boto3.client('sts', region_name=CONFIG['region'])
         identity = sts.get_caller_identity()
+        user_arn = identity['Arn']
         
-        user_arn = identity.get('Arn', '')
+        print("[OK] Credenciales AWS encontradas")
+        print("    Usuario: {}".format(user_arn))
         
-        print("[OK] Credenciales AWS validas")
-        print("    ARN: {}".format(user_arn))
-        
-        # Verificar que sea el rol correcto
-        if 'PIBAConsumeBoti' not in user_arn:
-            print("")
-            print("[ADVERTENCIA] No estas usando el rol correcto")
+        if 'PIBAConsumeBoti' in user_arn:
+            print("[OK] Rol correcto: PIBAConsumeBoti")
+        else:
+            print("[ADVERTENCIA] Rol actual no es PIBAConsumeBoti")
             print("    Se requiere: PIBAConsumeBoti")
             if '/' in user_arn:
                 current_role = user_arn.split('/')[-2]
@@ -371,21 +293,20 @@ def execute_query_and_save():
     print("")
     print("Leyendo configuracion de fechas...")
     
-    result = read_date_config(CONFIG['config_file'])
+    mes, anio = read_date_config(CONFIG['config_file'])
     
-    if result[0] is None:
+    if mes is None or anio is None:
         print("[ERROR] No se pudo leer la configuracion de fechas")
         return None
     
-    modo, fecha_inicio, fecha_fin, mes, anio, descripcion = result
+    mes_nombre = get_month_name(mes)
     
     print("[OK] Configuracion leida:")
-    print("    Periodo: {}".format(descripcion))
-    print("    Fecha inicio: {}".format(fecha_inicio))
-    print("    Fecha fin: {}".format(fecha_fin))
+    print("    Mes: {} ({})".format(mes, mes_nombre.capitalize()))
+    print("    Año: {}".format(anio))
     
-    # Construir query
-    query = build_query(fecha_inicio, fecha_fin)
+    # Construir query dinamicamente
+    query = build_query(mes, anio)
     
     print("")
     print("Configuracion AWS:")
@@ -453,7 +374,7 @@ def execute_query_and_save():
         # Mostrar resultados detallados
         print("")
         print("=" * 60)
-        print("RESULTADOS - {}".format(descripcion.upper()))
+        print("RESULTADOS - {} {}".format(mes_nombre.upper(), anio))
         print("=" * 60)
         print("\nDesglose por starting_cause:")
         for idx, row in df.iterrows():
@@ -464,7 +385,7 @@ def execute_query_and_save():
         print("=" * 60)
         
         # Generar nombres de archivo
-        filename_csv, filename_excel = generate_filename(modo, mes, anio, fecha_inicio, fecha_fin)
+        filename_csv, filename_excel = generate_filename(mes, anio)
         output_folder = CONFIG['output_folder']
         
         # Crear carpeta si no existe
@@ -481,7 +402,7 @@ def execute_query_and_save():
         
         # Crear Excel con Dashboard y resultado en D4
         print("Generando Excel Dashboard...")
-        create_excel_with_dashboard(local_path_excel, result_value, modo, mes, anio, fecha_inicio, fecha_fin)
+        create_excel_with_dashboard(local_path_excel, result_value, mes, anio)
         
         print("")
         print("ARCHIVOS GENERADOS:")
@@ -517,7 +438,6 @@ def execute_query_and_save():
         print("DIAGNOSTICO:")
         if 'table' in error_str and 'not' in error_str:
             print("    [!] La tabla no existe o no tienes permisos para accederla")
-            print("    Verifica acceso a: boti_session_metrics_2")
         elif 'workgroup' in error_str:
             print("    [!] Problema con el workgroup")
         elif 'permission' in error_str or 'denied' in error_str:
@@ -537,16 +457,11 @@ def execute_query_and_save():
 if __name__ == "__main__":
     print("")
     print("=" * 60)
-    print("SCRIPT: SESIONES ABIERTAS POR PUSHES - QUERY ATHENA V2")
+    print("SCRIPT: PUSHES ABIERTAS (starting_cause) - QUERY ATHENA")
     print("=" * 60)
     print("Lee configuracion desde: {}".format(CONFIG['config_file']))
     print("Rol requerido: PIBAConsumeBoti")
     print("Salida: CSV + Excel Dashboard NUEVO (resultado en celda D4)")
-    print("Query: boti_session_metrics_2 agrupado por starting_cause")
-    print("")
-    print("MODOS SOPORTADOS:")
-    print("  [1] MES COMPLETO: Configura MES y AÑO")
-    print("  [2] RANGO PERSONALIZADO: Configura FECHA_INICIO y FECHA_FIN")
     print("=" * 60)
     print("")
     
@@ -556,9 +471,9 @@ if __name__ == "__main__":
         print("")
         print("Listo! Tus archivos estan guardados.")
         print("")
-        print("Para procesar otro periodo:")
+        print("Para procesar otro mes/año:")
         print("    1. Edita el archivo: {}".format(CONFIG['config_file']))
-        print("    2. Cambia las fechas segun el modo deseado")
+        print("    2. Cambia MES y AÑO")
         print("    3. Vuelve a ejecutar este script")
     else:
         print("")
